@@ -13,13 +13,13 @@ export function SiteHeader() {
           </span>
         </a>
         <nav className="hidden items-center gap-6 text-sm font-medium text-muted-foreground sm:flex">
-          <a href="#top-dia" className="transition-colors hover:text-foreground">
+          <a href="/#top-dia" className="transition-colors hover:text-foreground">
             Top 10
           </a>
-          <a href="#ofertas" className="transition-colors hover:text-foreground">
-            Ofertas
+          <a href="/ofertas" className="transition-colors hover:text-foreground">
+            Todas as Ofertas
           </a>
-          <a href="#mercados" className="transition-colors hover:text-foreground">
+          <a href="/#mercados" className="transition-colors hover:text-foreground">
             Mercados
           </a>
         </nav>
