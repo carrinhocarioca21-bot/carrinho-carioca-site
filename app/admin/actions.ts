@@ -294,18 +294,18 @@ export async function excluirUsuario(id: string): Promise<ActionState> {
 
 /* ----------------------------- ENCARTES ----------------------------- */
 
-const TIPOS_IMAGEM = ["image/jpeg", "image/png", "image/webp"]
+const TIPOS_ACEITOS = ["image/jpeg", "image/png", "image/webp", "application/pdf"]
 
-async function uploadEncarte(imagem: File): Promise<string> {
-  if (!TIPOS_IMAGEM.includes(imagem.type)) {
-    throw new Error("Formato inválido. Envie uma imagem JPG, PNG ou WEBP.")
+async function uploadEncarte(arquivo: File): Promise<string> {
+  if (!TIPOS_ACEITOS.includes(arquivo.type)) {
+    throw new Error("Formato inválido. Envie uma imagem JPG, PNG, WEBP ou um PDF.")
   }
   const db = adminDb()
-  const ext = imagem.name.split(".").pop() || "jpg"
+  const ext = arquivo.name.split(".").pop() || (arquivo.type === "application/pdf" ? "pdf" : "jpg")
   const nome = `${crypto.randomUUID()}.${ext}`
   const { error } = await db.storage
     .from("encartes")
-    .upload(nome, imagem, { contentType: imagem.type, upsert: false })
+    .upload(nome, arquivo, { contentType: arquivo.type, upsert: false })
   if (error) throw new Error(`Falha no upload do encarte: ${error.message}`)
   const { data } = db.storage.from("encartes").getPublicUrl(nome)
   return data.publicUrl
@@ -321,14 +321,14 @@ export async function criarEncarte(
     const mercado_id = String(formData.get("mercado_id") ?? "")
     if (!mercado_id) throw new Error("Selecione um mercado.")
 
-    const imagem = formData.get("imagem") as File | null
-    if (!imagem || imagem.size === 0) throw new Error("Selecione uma imagem do encarte.")
+    const arquivo = formData.get("imagem") as File | null
+    if (!arquivo || arquivo.size === 0) throw new Error("Selecione o arquivo do encarte.")
 
     const validoRaw = formData.get("valido_ate")
     const valido_ate =
       validoRaw && String(validoRaw).trim() !== "" ? String(validoRaw) : null
 
-    const imagem_url = await uploadEncarte(imagem)
+    const imagem_url = await uploadEncarte(arquivo)
 
     // Colaborador cria pendente; master pode ja aprovar.
     const status = perfil.role === "master" && formData.get("aprovar") === "on"

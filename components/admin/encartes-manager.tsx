@@ -7,6 +7,7 @@ import {
   Trash2,
   Loader2,
   ImageIcon,
+  FileText,
   CheckCircle2,
   TimerOff,
   Clock,
@@ -55,10 +56,15 @@ function formatarData(valor: string | null) {
   return d.toLocaleDateString("pt-BR")
 }
 
+function ehPdf(url: string) {
+  return url.toLowerCase().split("?")[0].endsWith(".pdf")
+}
+
 export function EncartesManager({ role, encartes, mercados }: Props) {
   const isMaster = role === "master"
   const [filtro, setFiltro] = useState<EncarteStatus | "todos">("todos")
   const [preview, setPreview] = useState<string | null>(null)
+  const [previewPdf, setPreviewPdf] = useState(false)
   const [erroArquivo, setErroArquivo] = useState<string | null>(null)
   const formRef = useRef<HTMLFormElement>(null)
 
@@ -68,6 +74,7 @@ export function EncartesManager({ role, encartes, mercados }: Props) {
     if (state.ok) {
       formRef.current?.reset()
       setPreview(null)
+      setPreviewPdf(false)
       setErroArquivo(null)
     }
   }, [state.ok])
@@ -77,15 +84,18 @@ export function EncartesManager({ role, encartes, mercados }: Props) {
     setErroArquivo(null)
     if (!file) {
       setPreview(null)
+      setPreviewPdf(false)
       return
     }
-    const tiposOk = ["image/jpeg", "image/png", "image/webp"]
+    const tiposOk = ["image/jpeg", "image/png", "image/webp", "application/pdf"]
     if (!tiposOk.includes(file.type)) {
-      setErroArquivo("Formato inválido. Use JPG, PNG ou WEBP.")
+      setErroArquivo("Formato inválido. Use JPG, PNG, WEBP ou PDF.")
       setPreview(null)
+      setPreviewPdf(false)
       e.target.value = ""
       return
     }
+    setPreviewPdf(file.type === "application/pdf")
     setPreview(URL.createObjectURL(file))
   }
 
@@ -97,7 +107,7 @@ export function EncartesManager({ role, encartes, mercados }: Props) {
       <header>
         <h1 className="text-2xl font-bold tracking-tight">Encartes</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Faça upload das fotos de encarte dos mercados (JPG, PNG ou WEBP).
+          Faça upload dos encartes dos mercados (imagem JPG, PNG, WEBP ou PDF).
         </p>
       </header>
 
@@ -147,13 +157,13 @@ export function EncartesManager({ role, encartes, mercados }: Props) {
 
             <div>
               <label htmlFor="imagem" className="mb-1.5 block text-sm font-medium">
-                Imagem do encarte
+                Arquivo do encarte
               </label>
               <input
                 id="imagem"
                 name="imagem"
                 type="file"
-                accept="image/jpeg,image/png,image/webp"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
                 required
                 onChange={aoEscolherArquivo}
                 className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-secondary file:px-4 file:py-2 file:text-sm file:font-medium file:text-secondary-foreground hover:file:bg-secondary/80"
@@ -179,7 +189,14 @@ export function EncartesManager({ role, encartes, mercados }: Props) {
           <div>
             <span className="mb-1.5 block text-sm font-medium">Pré-visualização</span>
             <div className="flex aspect-[3/4] items-center justify-center overflow-hidden rounded-xl border border-dashed border-border bg-muted/40">
-              {preview ? (
+              {preview && previewPdf ? (
+                <object data={preview} type="application/pdf" className="h-full w-full">
+                  <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
+                    <FileText className="size-8" aria-hidden="true" />
+                    <span className="text-xs">PDF selecionado</span>
+                  </div>
+                </object>
+              ) : preview ? (
                 <Image
                   src={preview || "/placeholder.svg"}
                   alt="Pré-visualização do encarte"
@@ -191,7 +208,7 @@ export function EncartesManager({ role, encartes, mercados }: Props) {
               ) : (
                 <div className="flex flex-col items-center gap-2 text-muted-foreground">
                   <ImageIcon className="size-8" aria-hidden="true" />
-                  <span className="text-xs">A imagem aparecerá aqui</span>
+                  <span className="text-xs">O arquivo aparecerá aqui</span>
                 </div>
               )}
             </div>
@@ -272,13 +289,20 @@ function EncarteCard({ encarte }: { encarte: Encarte }) {
         onClick={() => setAberto(true)}
         className="relative aspect-[3/4] overflow-hidden bg-muted"
       >
-        <Image
-          src={encarte.imagem_url || "/placeholder.svg"}
-          alt={`Encarte ${encarte.mercados?.nome ?? ""}`}
-          fill
-          unoptimized
-          className="object-cover transition-transform hover:scale-105"
-        />
+        {ehPdf(encarte.imagem_url) ? (
+          <span className="flex h-full w-full flex-col items-center justify-center gap-2 text-muted-foreground">
+            <FileText className="size-10" aria-hidden="true" />
+            <span className="text-xs font-medium">Encarte em PDF</span>
+          </span>
+        ) : (
+          <Image
+            src={encarte.imagem_url || "/placeholder.svg"}
+            alt={`Encarte ${encarte.mercados?.nome ?? ""}`}
+            fill
+            unoptimized
+            className="object-cover transition-transform hover:scale-105"
+          />
+        )}
         <span
           className={cn(
             "absolute left-2 top-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
@@ -379,15 +403,24 @@ function EncarteCard({ encarte }: { encarte: Encarte }) {
           >
             <X className="size-5" aria-hidden="true" />
           </button>
-          <Image
-            src={encarte.imagem_url || "/placeholder.svg"}
-            alt={`Encarte ${encarte.mercados?.nome ?? ""}`}
-            width={800}
-            height={1066}
-            unoptimized
-            className="max-h-[90vh] w-auto rounded-lg object-contain"
-            onClick={(e) => e.stopPropagation()}
-          />
+          {ehPdf(encarte.imagem_url) ? (
+            <iframe
+              src={encarte.imagem_url}
+              title={`Encarte ${encarte.mercados?.nome ?? ""}`}
+              className="h-[90vh] w-full max-w-3xl rounded-lg bg-white"
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <Image
+              src={encarte.imagem_url || "/placeholder.svg"}
+              alt={`Encarte ${encarte.mercados?.nome ?? ""}`}
+              width={800}
+              height={1066}
+              unoptimized
+              className="max-h-[90vh] w-auto rounded-lg object-contain"
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
         </div>
       )}
     </li>
