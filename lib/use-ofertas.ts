@@ -10,8 +10,9 @@ async function fetchDados() {
     supabase
       .from("ofertas")
       .select(
-        "id, produto, preco, preco_antigo, unidade, mercado_id, destaque, valido_ate, created_at, mercados(id, nome, bairro, logo_cor)",
+        "id, produto, preco, preco_antigo, unidade, mercado_id, destaque, valido_ate, status, foto_url, created_at, mercados(id, nome, bairro, logo_cor)",
       )
+      .eq("status", "aprovada")
       .order("created_at", { ascending: false }),
     supabase
       .from("mercados")

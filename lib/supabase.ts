@@ -22,6 +22,8 @@ export type Mercado = {
   ativo: boolean
 }
 
+export type OfertaStatus = "pendente" | "aprovada" | "expirada"
+
 export type Oferta = {
   id: string
   produto: string
@@ -31,7 +33,21 @@ export type Oferta = {
   mercado_id: string
   destaque: boolean
   valido_ate: string | null
+  status: OfertaStatus
+  foto_url: string | null
   created_at: string | null
   // join com mercados
   mercados: Pick<Mercado, "id" | "nome" | "bairro" | "logo_cor"> | null
+}
+
+export type UsuarioRole = "master" | "colaborador"
+
+export type Usuario = {
+  id: string
+  nome: string | null
+  email: string | null
+  role: UsuarioRole
+  is_admin: boolean
+  ativo: boolean
+  created_at: string | null
 }
