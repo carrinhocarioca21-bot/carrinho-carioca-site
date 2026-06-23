@@ -18,7 +18,7 @@ export function HeroSearch() {
           Carrinho Carioca
         </h1>
         <p className="animate-fade-up mx-auto mt-4 max-w-xl text-pretty text-base leading-relaxed text-primary-foreground/90 sm:text-lg" style={{ animationDelay: "160ms" }}>
-          Compare preços e descubra onde comprar mais barato.
+          Compare preços dos supermercados do Rio de Janeiro.
         </p>
 
         <form
