@@ -12,7 +12,8 @@ import {
   LogOut,
   Tag,
 } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import type { Oferta, Mercado } from "@/lib/supabase"
 import { criarOferta, atualizarOferta, excluirOferta, sairAdmin } from "@/app/admin/actions"
 
@@ -61,10 +62,13 @@ export function AdminDashboard({ adminNome, ofertas, mercados }: Props) {
             </div>
           </div>
           <form action={sairAdmin}>
-            <Button variant="ghost" size="sm" type="submit" className="gap-2">
+            <button
+              type="submit"
+              className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-2")}
+            >
               <LogOut className="size-4" aria-hidden="true" />
               Sair
-            </Button>
+            </button>
           </form>
         </div>
       </header>
@@ -323,10 +327,14 @@ function OfertaDialog({
             >
               Cancelar
             </Button>
-            <Button type="submit" size="lg" disabled={pending} className="flex-1 gap-2">
+            <button
+              type="submit"
+              disabled={pending}
+              className={cn(buttonVariants({ size: "lg" }), "flex-1 gap-2")}
+            >
               {pending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
               {oferta ? "Salvar" : "Criar"}
-            </Button>
+            </button>
           </div>
         </form>
       </div>
