@@ -1,9 +1,8 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import useSWR from "swr"
-import { Search, MapPin, Store, CalendarClock, Tag } from "lucide-react"
-import { getSupabaseClient, type Oferta, type Mercado } from "@/lib/supabase"
+import { Search, MapPin, Store, CalendarClock, Tag, ArrowUpDown } from "lucide-react"
+import { useOfertas, calcularDesconto } from "@/lib/use-ofertas"
 
 const moeda = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -16,43 +15,37 @@ function formatarValidade(data: string | null) {
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
 }
 
-async function fetchDados() {
-  const supabase = getSupabaseClient()
-
-  const [ofertasRes, mercadosRes] = await Promise.all([
-    supabase
-      .from("ofertas")
-      .select(
-        "id, produto, preco, preco_antigo, unidade, mercado_id, destaque, valido_ate, mercados(id, nome, bairro, logo_cor)",
-      )
-      .order("destaque", { ascending: false })
-      .order("preco", { ascending: true }),
-    supabase.from("mercados").select("id, nome, bairro, logo_cor, ativo").order("nome"),
-  ])
-
-  if (ofertasRes.error) throw ofertasRes.error
-  if (mercadosRes.error) throw mercadosRes.error
-
-  return {
-    ofertas: (ofertasRes.data ?? []) as unknown as Oferta[],
-    mercados: (mercadosRes.data ?? []) as Mercado[],
-  }
-}
+type Ordenacao = "menor-preco" | "maior-desconto" | "mais-recentes"
 
 export function OfertasExplorer() {
-  const { data, error, isLoading } = useSWR("ofertas-mercados", fetchDados)
+  const { data, error, isLoading } = useOfertas()
   const [busca, setBusca] = useState("")
   const [mercadoId, setMercadoId] = useState<string>("todos")
+  const [ordem, setOrdem] = useState<Ordenacao>("menor-preco")
 
   const ofertasFiltradas = useMemo(() => {
     if (!data) return []
     const termo = busca.trim().toLowerCase()
-    return data.ofertas.filter((o) => {
+
+    const filtradas = data.ofertas.filter((o) => {
       const correspondeBusca = termo === "" || o.produto.toLowerCase().includes(termo)
       const correspondeMercado = mercadoId === "todos" || o.mercado_id === mercadoId
       return correspondeBusca && correspondeMercado
     })
-  }, [data, busca, mercadoId])
+
+    const ordenadas = [...filtradas]
+    if (ordem === "menor-preco") {
+      ordenadas.sort((a, b) => a.preco - b.preco)
+    } else if (ordem === "maior-desconto") {
+      ordenadas.sort((a, b) => calcularDesconto(b) - calcularDesconto(a))
+    } else {
+      ordenadas.sort(
+        (a, b) =>
+          new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime(),
+      )
+    }
+    return ordenadas
+  }, [data, busca, mercadoId, ordem])
 
   return (
     <section id="ofertas" className="bg-secondary/40 py-12 sm:py-16">
@@ -82,7 +75,7 @@ export function OfertasExplorer() {
               className="h-12 w-full rounded-xl border border-border bg-card pl-11 pr-4 text-base outline-none ring-primary/30 transition focus:ring-2"
             />
           </div>
-          <div className="relative sm:w-64">
+          <div className="relative sm:w-52">
             <Store
               className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground"
               aria-hidden="true"
@@ -101,7 +94,31 @@ export function OfertasExplorer() {
               ))}
             </select>
           </div>
+          <div className="relative sm:w-52">
+            <ArrowUpDown
+              className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <select
+              value={ordem}
+              onChange={(e) => setOrdem(e.target.value as Ordenacao)}
+              aria-label="Ordenar ofertas"
+              className="h-12 w-full appearance-none rounded-xl border border-border bg-card pl-11 pr-8 text-base outline-none ring-primary/30 transition focus:ring-2"
+            >
+              <option value="menor-preco">Menor preço</option>
+              <option value="maior-desconto">Maior desconto</option>
+              <option value="mais-recentes">Mais recentes</option>
+            </select>
+          </div>
         </div>
+
+        {/* Contagem de ofertas encontradas */}
+        {!isLoading && !error && (
+          <p className="mt-5 text-sm font-medium text-muted-foreground" aria-live="polite">
+            {ofertasFiltradas.length}{" "}
+            {ofertasFiltradas.length === 1 ? "oferta encontrada" : "ofertas encontradas"}
+          </p>
+        )}
 
         {/* Estados */}
         {isLoading && (
@@ -122,9 +139,10 @@ export function OfertasExplorer() {
 
         {/* Lista de ofertas */}
         {!isLoading && !error && ofertasFiltradas.length > 0 && (
-          <ul className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {ofertasFiltradas.map((o) => {
               const validade = formatarValidade(o.valido_ate)
+              const desconto = calcularDesconto(o)
               return (
                 <li
                   key={o.id}
@@ -134,11 +152,17 @@ export function OfertasExplorer() {
                     <h3 className="text-pretty text-lg font-semibold leading-tight">
                       {o.produto}
                     </h3>
-                    {o.destaque && (
-                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent px-2 py-1 text-xs font-medium text-accent-foreground">
-                        <Tag className="size-3" aria-hidden="true" />
-                        Destaque
+                    {desconto > 0 ? (
+                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary px-2 py-1 text-xs font-bold text-primary-foreground">
+                        -{desconto}%
                       </span>
+                    ) : (
+                      o.destaque && (
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent px-2 py-1 text-xs font-medium text-accent-foreground">
+                          <Tag className="size-3" aria-hidden="true" />
+                          Destaque
+                        </span>
+                      )
                     )}
                   </div>
 

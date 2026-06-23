@@ -31,6 +31,7 @@ export type Oferta = {
   mercado_id: string
   destaque: boolean
   valido_ate: string | null
+  created_at: string | null
   // join com mercados
   mercados: Pick<Mercado, "id" | "nome" | "bairro" | "logo_cor"> | null
 }

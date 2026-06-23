@@ -1,6 +1,10 @@
-import { MessageCircle } from "lucide-react"
+import { MessageCircle, Send } from "lucide-react"
 import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+
+const mensagemPromo = encodeURIComponent(
+  "Olá! Encontrei uma promoção e quero enviar para o Carrinho Carioca:\n\nProduto:\nPreço:\nMercado:\nBairro:",
+)
 
 export function WhatsappCta() {
   return (
@@ -15,18 +19,32 @@ export function WhatsappCta() {
         <p className="max-w-md text-pretty text-muted-foreground">
           Receba as melhores ofertas dos mercados do Rio direto no seu celular.
         </p>
-        <a
-          href="https://wa.me/"
-          target="_blank"
-          rel="noopener noreferrer"
-          className={cn(
-            buttonVariants({ size: "lg" }),
-            "h-12 gap-2 px-6 text-base shadow-lg shadow-primary/30 transition-transform duration-300 hover:scale-105 hover:bg-primary/90",
-          )}
-        >
-          <MessageCircle className="size-5" aria-hidden="true" />
-          Receber Promoções no WhatsApp
-        </a>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <a
+            href="https://wa.me/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn(
+              buttonVariants({ size: "lg" }),
+              "h-12 gap-2 px-6 text-base shadow-lg shadow-primary/30 transition-transform duration-300 hover:scale-105 hover:bg-primary/90",
+            )}
+          >
+            <MessageCircle className="size-5" aria-hidden="true" />
+            Receber Promoções
+          </a>
+          <a
+            href={`https://wa.me/?text=${mensagemPromo}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn(
+              buttonVariants({ variant: "outline", size: "lg" }),
+              "h-12 gap-2 px-6 text-base transition-transform duration-300 hover:scale-105",
+            )}
+          >
+            <Send className="size-5" aria-hidden="true" />
+            Enviar Promoção
+          </a>
+        </div>
       </div>
     </section>
   )
