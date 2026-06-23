@@ -38,5 +38,13 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // Pagina publica de envio de ofertas: apenas usuarios logados
+  if (path.startsWith("/enviar") && !user) {
+    const url = request.nextUrl.clone()
+    url.pathname = "/admin/login"
+    url.searchParams.set("next", "/enviar")
+    return NextResponse.redirect(url)
+  }
+
   return supabaseResponse
 }

@@ -1,13 +1,15 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { Suspense, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { ShoppingCart, Loader2 } from "lucide-react"
 
-export default function AdminLoginPage() {
+function LoginForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const destino = searchParams.get("next") || "/admin"
   const [email, setEmail] = useState("")
   const [senha, setSenha] = useState("")
   const [erro, setErro] = useState<string | null>(null)
@@ -25,7 +27,7 @@ export default function AdminLoginPage() {
         password: senha,
       })
       if (error) throw error
-      router.push("/admin")
+      router.push(destino)
       router.refresh()
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Erro ao autenticar.")
@@ -94,5 +96,19 @@ export default function AdminLoginPage() {
         </p>
       </div>
     </main>
+  )
+}
+
+export default function AdminLoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-secondary">
+          <Loader2 className="size-6 animate-spin text-muted-foreground" aria-hidden="true" />
+        </main>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   )
 }
