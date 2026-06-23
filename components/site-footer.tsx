@@ -25,6 +25,12 @@ export function SiteFooter() {
         <p className="mt-4 text-sm text-primary-foreground/70">
           © {new Date().getFullYear()} Carrinho Carioca · O Rio compra melhor aqui.
         </p>
+        <a
+          href="/admin"
+          className="text-xs text-primary-foreground/60 underline-offset-4 transition-colors hover:text-primary-foreground hover:underline"
+        >
+          Acesso administrativo
+        </a>
       </div>
     </footer>
   )
