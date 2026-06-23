@@ -291,3 +291,112 @@ export async function excluirUsuario(id: string): Promise<ActionState> {
     return { ok: false, error: err instanceof Error ? err.message : "Erro." }
   }
 }
+
+/* ----------------------------- ENCARTES ----------------------------- */
+
+const TIPOS_IMAGEM = ["image/jpeg", "image/png", "image/webp"]
+
+async function uploadEncarte(imagem: File): Promise<string> {
+  if (!TIPOS_IMAGEM.includes(imagem.type)) {
+    throw new Error("Formato inválido. Envie uma imagem JPG, PNG ou WEBP.")
+  }
+  const db = adminDb()
+  const ext = imagem.name.split(".").pop() || "jpg"
+  const nome = `${crypto.randomUUID()}.${ext}`
+  const { error } = await db.storage
+    .from("encartes")
+    .upload(nome, imagem, { contentType: imagem.type, upsert: false })
+  if (error) throw new Error(`Falha no upload do encarte: ${error.message}`)
+  const { data } = db.storage.from("encartes").getPublicUrl(nome)
+  return data.publicUrl
+}
+
+export async function criarEncarte(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    const perfil = await requireStaff()
+
+    const mercado_id = String(formData.get("mercado_id") ?? "")
+    if (!mercado_id) throw new Error("Selecione um mercado.")
+
+    const imagem = formData.get("imagem") as File | null
+    if (!imagem || imagem.size === 0) throw new Error("Selecione uma imagem do encarte.")
+
+    const validoRaw = formData.get("valido_ate")
+    const valido_ate =
+      validoRaw && String(validoRaw).trim() !== "" ? String(validoRaw) : null
+
+    const imagem_url = await uploadEncarte(imagem)
+
+    // Colaborador cria pendente; master pode ja aprovar.
+    const status = perfil.role === "master" && formData.get("aprovar") === "on"
+      ? "aprovado"
+      : "pendente"
+
+    const db = adminDb()
+    const { error } = await db
+      .from("encartes")
+      .insert({ mercado_id, imagem_url, valido_ate, status })
+    if (error) throw new Error(error.message)
+
+    revalidatePath("/admin/encartes")
+    revalidatePath("/")
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Erro ao enviar encarte." }
+  }
+}
+
+export async function aprovarEncarte(id: string): Promise<ActionState> {
+  try {
+    await requireStaff()
+    const db = adminDb()
+    const { error } = await db.from("encartes").update({ status: "aprovado" }).eq("id", id)
+    if (error) throw new Error(error.message)
+    revalidatePath("/admin/encartes")
+    revalidatePath("/")
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Erro." }
+  }
+}
+
+export async function expirarEncarte(id: string): Promise<ActionState> {
+  try {
+    await requireStaff()
+    const db = adminDb()
+    const { error } = await db.from("encartes").update({ status: "expirado" }).eq("id", id)
+    if (error) throw new Error(error.message)
+    revalidatePath("/admin/encartes")
+    revalidatePath("/")
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Erro." }
+  }
+}
+
+export async function excluirEncarte(id: string): Promise<ActionState> {
+  try {
+    await requireStaff()
+    const db = adminDb()
+    // Remove o arquivo do storage antes de apagar o registro.
+    const { data: encarte } = await db
+      .from("encartes")
+      .select("imagem_url")
+      .eq("id", id)
+      .single()
+    if (encarte?.imagem_url) {
+      const nome = encarte.imagem_url.split("/encartes/").pop()
+      if (nome) await db.storage.from("encartes").remove([nome])
+    }
+    const { error } = await db.from("encartes").delete().eq("id", id)
+    if (error) throw new Error(error.message)
+    revalidatePath("/admin/encartes")
+    revalidatePath("/")
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Erro." }
+  }
+}

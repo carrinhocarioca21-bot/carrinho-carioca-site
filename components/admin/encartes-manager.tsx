@@ -1,0 +1,395 @@
+"use client"
+
+import { useState, useActionState, useEffect, useRef } from "react"
+import Image from "next/image"
+import {
+  Upload,
+  Trash2,
+  Loader2,
+  ImageIcon,
+  CheckCircle2,
+  TimerOff,
+  Clock,
+  X,
+} from "lucide-react"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
+import type { Encarte, Mercado, EncarteStatus, UsuarioRole } from "@/lib/supabase"
+import {
+  criarEncarte,
+  aprovarEncarte,
+  expirarEncarte,
+  excluirEncarte,
+} from "@/app/admin/actions"
+
+type Props = {
+  role: UsuarioRole
+  encartes: Encarte[]
+  mercados: Mercado[]
+}
+
+const STATUS_INFO: Record<
+  EncarteStatus,
+  { label: string; classe: string; Icon: typeof Clock }
+> = {
+  pendente: {
+    label: "Pendente",
+    classe: "bg-amber-100 text-amber-800",
+    Icon: Clock,
+  },
+  aprovado: {
+    label: "Aprovado",
+    classe: "bg-primary/15 text-primary",
+    Icon: CheckCircle2,
+  },
+  expirado: {
+    label: "Expirado",
+    classe: "bg-muted text-muted-foreground",
+    Icon: TimerOff,
+  },
+}
+
+function formatarData(valor: string | null) {
+  if (!valor) return "—"
+  const d = new Date(valor.includes("T") ? valor : `${valor}T00:00:00`)
+  return d.toLocaleDateString("pt-BR")
+}
+
+export function EncartesManager({ role, encartes, mercados }: Props) {
+  const isMaster = role === "master"
+  const [filtro, setFiltro] = useState<EncarteStatus | "todos">("todos")
+  const [preview, setPreview] = useState<string | null>(null)
+  const [erroArquivo, setErroArquivo] = useState<string | null>(null)
+  const formRef = useRef<HTMLFormElement>(null)
+
+  const [state, formAction, pending] = useActionState(criarEncarte, { ok: false })
+
+  useEffect(() => {
+    if (state.ok) {
+      formRef.current?.reset()
+      setPreview(null)
+      setErroArquivo(null)
+    }
+  }, [state.ok])
+
+  function aoEscolherArquivo(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    setErroArquivo(null)
+    if (!file) {
+      setPreview(null)
+      return
+    }
+    const tiposOk = ["image/jpeg", "image/png", "image/webp"]
+    if (!tiposOk.includes(file.type)) {
+      setErroArquivo("Formato inválido. Use JPG, PNG ou WEBP.")
+      setPreview(null)
+      e.target.value = ""
+      return
+    }
+    setPreview(URL.createObjectURL(file))
+  }
+
+  const lista =
+    filtro === "todos" ? encartes : encartes.filter((e) => e.status === filtro)
+
+  return (
+    <div className="space-y-8">
+      <header>
+        <h1 className="text-2xl font-bold tracking-tight">Encartes</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Faça upload das fotos de encarte dos mercados (JPG, PNG ou WEBP).
+        </p>
+      </header>
+
+      {/* Formulario de upload */}
+      <form
+        ref={formRef}
+        action={formAction}
+        className="rounded-2xl border border-border bg-card p-6"
+      >
+        <h2 className="text-lg font-semibold">Novo encarte</h2>
+        <div className="mt-4 grid gap-5 md:grid-cols-2">
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="mercado_id" className="mb-1.5 block text-sm font-medium">
+                Mercado
+              </label>
+              <select
+                id="mercado_id"
+                name="mercado_id"
+                required
+                defaultValue=""
+                className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="" disabled>
+                  Selecione um mercado
+                </option>
+                {mercados.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.nome}
+                    {m.bairro ? ` — ${m.bairro}` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="valido_ate" className="mb-1.5 block text-sm font-medium">
+                Data de validade
+              </label>
+              <input
+                id="valido_ate"
+                name="valido_ate"
+                type="date"
+                className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="imagem" className="mb-1.5 block text-sm font-medium">
+                Imagem do encarte
+              </label>
+              <input
+                id="imagem"
+                name="imagem"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                required
+                onChange={aoEscolherArquivo}
+                className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-secondary file:px-4 file:py-2 file:text-sm file:font-medium file:text-secondary-foreground hover:file:bg-secondary/80"
+              />
+              {erroArquivo && (
+                <p className="mt-1.5 text-sm text-destructive">{erroArquivo}</p>
+              )}
+            </div>
+
+            {isMaster && (
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  name="aprovar"
+                  className="size-4 rounded border-input"
+                />
+                Aprovar imediatamente
+              </label>
+            )}
+          </div>
+
+          {/* Pre-visualizacao */}
+          <div>
+            <span className="mb-1.5 block text-sm font-medium">Pré-visualização</span>
+            <div className="flex aspect-[3/4] items-center justify-center overflow-hidden rounded-xl border border-dashed border-border bg-muted/40">
+              {preview ? (
+                <Image
+                  src={preview || "/placeholder.svg"}
+                  alt="Pré-visualização do encarte"
+                  width={400}
+                  height={533}
+                  unoptimized
+                  className="h-full w-full object-contain"
+                />
+              ) : (
+                <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                  <ImageIcon className="size-8" aria-hidden="true" />
+                  <span className="text-xs">A imagem aparecerá aqui</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {state.error && (
+          <p className="mt-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {state.error}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          disabled={pending}
+          className={cn(buttonVariants({ size: "lg" }), "mt-5 gap-2")}
+        >
+          {pending ? (
+            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <Upload className="size-4" aria-hidden="true" />
+          )}
+          Enviar encarte
+        </button>
+      </form>
+
+      {/* Filtro */}
+      <div className="flex flex-wrap gap-2">
+        {(["todos", "pendente", "aprovado", "expirado"] as const).map((f) => (
+          <button
+            key={f}
+            type="button"
+            onClick={() => setFiltro(f)}
+            className={cn(
+              "rounded-full px-4 py-1.5 text-sm font-medium capitalize transition-colors",
+              filtro === f
+                ? "bg-primary text-primary-foreground"
+                : "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+            )}
+          >
+            {f}
+          </button>
+        ))}
+      </div>
+
+      {/* Lista de encartes */}
+      {lista.length === 0 ? (
+        <p className="rounded-2xl border border-dashed border-border bg-card p-10 text-center text-sm text-muted-foreground">
+          Nenhum encarte {filtro !== "todos" ? `${filtro}` : "enviado"} ainda.
+        </p>
+      ) : (
+        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {lista.map((encarte) => (
+            <EncarteCard key={encarte.id} encarte={encarte} />
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function EncarteCard({ encarte }: { encarte: Encarte }) {
+  const [aberto, setAberto] = useState(false)
+  const [acaoPendente, setAcaoPendente] = useState<string | null>(null)
+  const info = STATUS_INFO[encarte.status]
+
+  async function executar(fn: () => Promise<{ ok: boolean; error?: string }>, nome: string) {
+    setAcaoPendente(nome)
+    const res = await fn()
+    setAcaoPendente(null)
+    if (!res.ok && res.error) alert(res.error)
+  }
+
+  return (
+    <li className="flex flex-col overflow-hidden rounded-2xl border border-border bg-card">
+      <button
+        type="button"
+        onClick={() => setAberto(true)}
+        className="relative aspect-[3/4] overflow-hidden bg-muted"
+      >
+        <Image
+          src={encarte.imagem_url || "/placeholder.svg"}
+          alt={`Encarte ${encarte.mercados?.nome ?? ""}`}
+          fill
+          unoptimized
+          className="object-cover transition-transform hover:scale-105"
+        />
+        <span
+          className={cn(
+            "absolute left-2 top-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
+            info.classe,
+          )}
+        >
+          <info.Icon className="size-3" aria-hidden="true" />
+          {info.label}
+        </span>
+      </button>
+
+      <div className="flex flex-1 flex-col gap-3 p-4">
+        <div>
+          <p className="font-semibold leading-tight">
+            {encarte.mercados?.nome ?? "Mercado"}
+          </p>
+          {encarte.mercados?.bairro && (
+            <p className="text-xs text-muted-foreground">{encarte.mercados.bairro}</p>
+          )}
+        </div>
+        <dl className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+          <div>
+            <dt>Enviado em</dt>
+            <dd className="font-medium text-foreground">
+              {formatarData(encarte.created_at)}
+            </dd>
+          </div>
+          <div>
+            <dt>Válido até</dt>
+            <dd className="font-medium text-foreground">
+              {formatarData(encarte.valido_ate)}
+            </dd>
+          </div>
+        </dl>
+
+        <div className="mt-auto flex flex-wrap gap-2 pt-2">
+          {encarte.status !== "aprovado" && (
+            <Button
+              size="sm"
+              onClick={() => executar(() => aprovarEncarte(encarte.id), "aprovar")}
+              disabled={acaoPendente !== null}
+              className="gap-1.5"
+            >
+              {acaoPendente === "aprovar" ? (
+                <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <CheckCircle2 className="size-3.5" aria-hidden="true" />
+              )}
+              Aprovar
+            </Button>
+          )}
+          {encarte.status === "aprovado" && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => executar(() => expirarEncarte(encarte.id), "expirar")}
+              disabled={acaoPendente !== null}
+              className="gap-1.5"
+            >
+              <TimerOff className="size-3.5" aria-hidden="true" />
+              Expirar
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              if (confirm("Excluir este encarte?")) {
+                executar(() => excluirEncarte(encarte.id), "excluir")
+              }
+            }}
+            disabled={acaoPendente !== null}
+            className="gap-1.5 text-destructive hover:text-destructive"
+          >
+            {acaoPendente === "excluir" ? (
+              <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+            ) : (
+              <Trash2 className="size-3.5" aria-hidden="true" />
+            )}
+            Excluir
+          </Button>
+        </div>
+      </div>
+
+      {/* Lightbox */}
+      {aberto && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setAberto(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            type="button"
+            onClick={() => setAberto(false)}
+            className="absolute right-4 top-4 rounded-full bg-background/20 p-2 text-white hover:bg-background/30"
+            aria-label="Fechar"
+          >
+            <X className="size-5" aria-hidden="true" />
+          </button>
+          <Image
+            src={encarte.imagem_url || "/placeholder.svg"}
+            alt={`Encarte ${encarte.mercados?.nome ?? ""}`}
+            width={800}
+            height={1066}
+            unoptimized
+            className="max-h-[90vh] w-auto rounded-lg object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+    </li>
+  )
+}

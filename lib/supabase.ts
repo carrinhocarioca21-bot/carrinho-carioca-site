@@ -40,6 +40,18 @@ export type Oferta = {
   mercados: Pick<Mercado, "id" | "nome" | "bairro" | "logo_cor"> | null
 }
 
+export type EncarteStatus = "pendente" | "aprovado" | "expirado"
+
+export type Encarte = {
+  id: string
+  mercado_id: string
+  imagem_url: string
+  valido_ate: string | null
+  status: EncarteStatus
+  created_at: string | null
+  mercados: Pick<Mercado, "id" | "nome" | "bairro" | "logo_cor"> | null
+}
+
 export type UsuarioRole = "master" | "colaborador"
 
 export type Usuario = {

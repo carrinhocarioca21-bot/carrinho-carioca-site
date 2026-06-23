@@ -10,6 +10,7 @@ import {
   Users,
   Settings,
   ShoppingCart,
+  Images,
   LogOut,
   Menu,
   X,
@@ -29,6 +30,7 @@ type Item = {
 const ITENS: Item[] = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/ofertas", label: "Ofertas", icon: Tag },
+  { href: "/admin/encartes", label: "Encartes", icon: Images },
   { href: "/admin/mercados", label: "Mercados", icon: Store, masterOnly: true },
   { href: "/admin/usuarios", label: "Usuários", icon: Users, masterOnly: true },
   { href: "/admin/configuracoes", label: "Configurações", icon: Settings },
