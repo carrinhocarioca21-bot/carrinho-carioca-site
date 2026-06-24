@@ -40,6 +40,20 @@ export async function enviarOferta(
     const mercado_id = String(formData.get("mercado_id") ?? "")
     const foto = formData.get("foto") as File | null
 
+    // Geolocalizacao opcional (so e salva se o usuario permitir o acesso).
+    const latRaw = formData.get("latitude")
+    const lngRaw = formData.get("longitude")
+    const latitude =
+      latRaw && String(latRaw).trim() !== "" && Number.isFinite(Number(latRaw))
+        ? Number(latRaw)
+        : null
+    const longitude =
+      lngRaw && String(lngRaw).trim() !== "" && Number.isFinite(Number(lngRaw))
+        ? Number(lngRaw)
+        : null
+    const bairro = String(formData.get("bairro") ?? "").trim() || null
+    const regiao = String(formData.get("regiao") ?? "").trim() || null
+
     if (!foto || foto.size === 0) throw new Error("A foto da oferta é obrigatória.")
     if (!TIPOS_IMAGEM.includes(foto.type))
       throw new Error("Formato inválido. Envie uma imagem JPG, PNG ou WEBP.")
@@ -69,6 +83,10 @@ export async function enviarOferta(
       mercado_id,
       foto_url: pub.publicUrl,
       status: "pendente",
+      latitude,
+      longitude,
+      bairro,
+      regiao,
     })
     if (error) throw new Error(error.message)
 

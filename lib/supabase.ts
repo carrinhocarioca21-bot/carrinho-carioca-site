@@ -35,6 +35,10 @@ export type Oferta = {
   valido_ate: string | null
   status: OfertaStatus
   foto_url: string | null
+  latitude: number | null
+  longitude: number | null
+  bairro: string | null
+  regiao: string | null
   created_at: string | null
   // join com mercados
   mercados: Pick<Mercado, "id" | "nome" | "bairro" | "logo_cor"> | null

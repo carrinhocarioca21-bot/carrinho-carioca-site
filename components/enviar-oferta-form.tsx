@@ -14,7 +14,11 @@ import {
   CheckCircle2,
   ShoppingCart,
   ArrowLeft,
+  MapPin,
+  MapPinOff,
 } from "lucide-react"
+
+type GeoStatus = "idle" | "carregando" | "ok" | "negado" | "erro"
 
 export function EnviarOfertaForm({ mercados }: { mercados: Mercado[] }) {
   const [preview, setPreview] = useState<string | null>(null)
@@ -22,15 +26,64 @@ export function EnviarOfertaForm({ mercados }: { mercados: Mercado[] }) {
   const [mercadoId, setMercadoId] = useState("")
   const formRef = useRef<HTMLFormElement>(null)
 
+  // Geolocalizacao opcional
+  const [geoStatus, setGeoStatus] = useState<GeoStatus>("idle")
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
+  const [bairro, setBairro] = useState("")
+  const [regiao, setRegiao] = useState("")
+
   const [state, formAction, pending] = useActionState(enviarOferta, { ok: false })
 
-  const bairro = mercados.find((m) => m.id === mercadoId)?.bairro ?? ""
+  const mercadoBairro = mercados.find((m) => m.id === mercadoId)?.bairro ?? ""
+
+  // Solicita a localizacao ao abrir a pagina (opcional).
+  function solicitarLocalizacao() {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setGeoStatus("erro")
+      return
+    }
+    setGeoStatus("carregando")
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords
+        setCoords({ lat: latitude, lng: longitude })
+        try {
+          const res = await fetch(
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=pt`,
+          )
+          const data = await res.json()
+          const novoBairro = data.locality || data.city || ""
+          const novaRegiao = [data.city, data.principalSubdivision]
+            .filter(Boolean)
+            .join(" - ")
+          if (novoBairro) setBairro(novoBairro)
+          if (novaRegiao) setRegiao(novaRegiao)
+        } catch {
+          // Mantem as coordenadas mesmo se o reverse geocoding falhar.
+        }
+        setGeoStatus("ok")
+      },
+      () => setGeoStatus("negado"),
+      { enableHighAccuracy: true, timeout: 10000 },
+    )
+  }
+
+  useEffect(() => {
+    solicitarLocalizacao()
+  }, [])
+
+  // Se o usuario ainda nao tem bairro (via geo) e escolhe um mercado, usa o bairro do mercado.
+  useEffect(() => {
+    if (!bairro && mercadoBairro) setBairro(mercadoBairro)
+  }, [mercadoBairro, bairro])
 
   useEffect(() => {
     if (state.ok) {
       formRef.current?.reset()
       setPreview(null)
       setMercadoId("")
+      setBairro("")
+      setRegiao("")
       setErroArquivo(null)
       window.scrollTo({ top: 0, behavior: "smooth" })
     }
@@ -106,6 +159,44 @@ export function EnviarOfertaForm({ mercados }: { mercados: Mercado[] }) {
       </header>
 
       <form ref={formRef} action={formAction} className="flex flex-col gap-5">
+        {/* Status da geolocalizacao (opcional) */}
+        <div
+          className={cn(
+            "flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm",
+            geoStatus === "ok"
+              ? "border-primary/30 bg-primary/5 text-foreground"
+              : "border-border bg-muted/40 text-muted-foreground",
+          )}
+        >
+          {geoStatus === "carregando" ? (
+            <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden="true" />
+          ) : geoStatus === "ok" ? (
+            <MapPin className="size-4 shrink-0 text-primary" aria-hidden="true" />
+          ) : (
+            <MapPinOff className="size-4 shrink-0" aria-hidden="true" />
+          )}
+          <span className="flex-1 text-pretty">
+            {geoStatus === "carregando" && "Buscando sua localização..."}
+            {geoStatus === "ok" && "Localização detectada. Confira o bairro e a região abaixo."}
+            {geoStatus === "negado" && "Localização não autorizada. Você pode preencher o bairro manualmente."}
+            {geoStatus === "erro" && "Localização indisponível neste dispositivo."}
+            {geoStatus === "idle" && "Use sua localização para preencher o bairro automaticamente."}
+          </span>
+          {geoStatus !== "ok" && geoStatus !== "carregando" && (
+            <button
+              type="button"
+              onClick={solicitarLocalizacao}
+              className="shrink-0 font-medium text-primary underline-offset-4 hover:underline"
+            >
+              Usar localização
+            </button>
+          )}
+        </div>
+
+        {/* Coordenadas (ocultas, salvas com a oferta) */}
+        <input type="hidden" name="latitude" value={coords?.lat ?? ""} />
+        <input type="hidden" name="longitude" value={coords?.lng ?? ""} />
+
         {/* Foto (obrigatoria) */}
         <div className="flex flex-col gap-2">
           <label htmlFor="foto" className="text-sm font-medium">
@@ -219,18 +310,34 @@ export function EnviarOfertaForm({ mercados }: { mercados: Mercado[] }) {
           </select>
         </div>
 
-        {/* Bairro (preenchido a partir do mercado) */}
+        {/* Bairro e Regiao (preenchidos pela localizacao, editaveis) */}
         <div className="flex flex-col gap-1.5">
           <label htmlFor="bairro" className="text-sm font-medium">
             Bairro
           </label>
           <input
             id="bairro"
+            name="bairro"
             type="text"
-            readOnly
             value={bairro}
-            placeholder="Selecione um mercado"
-            className="h-11 rounded-xl border border-input bg-muted px-3 text-sm text-muted-foreground outline-none"
+            onChange={(e) => setBairro(e.target.value)}
+            placeholder="Detectado pela localização ou pelo mercado"
+            className="h-11 rounded-xl border border-input bg-background px-3 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="regiao" className="text-sm font-medium">
+            Região
+          </label>
+          <input
+            id="regiao"
+            name="regiao"
+            type="text"
+            value={regiao}
+            onChange={(e) => setRegiao(e.target.value)}
+            placeholder="Detectada pela sua localização"
+            className="h-11 rounded-xl border border-input bg-background px-3 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
           />
         </div>
 
