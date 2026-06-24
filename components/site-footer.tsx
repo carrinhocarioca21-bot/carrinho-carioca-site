@@ -1,4 +1,30 @@
-import { ShoppingCart, AtSign } from "lucide-react"
+import { ShoppingCart, Mail } from "lucide-react"
+
+function InstagramGlyph() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      role="img"
+      aria-label="Instagram"
+      className="shrink-0"
+    >
+      <defs>
+        <radialGradient id="ig-gradient" cx="30%" cy="107%" r="150%">
+          <stop offset="0%" stopColor="#fdf497" />
+          <stop offset="5%" stopColor="#fdf497" />
+          <stop offset="45%" stopColor="#fd5949" />
+          <stop offset="60%" stopColor="#d6249f" />
+          <stop offset="90%" stopColor="#285AEB" />
+        </radialGradient>
+      </defs>
+      <rect x="2" y="2" width="20" height="20" rx="6" fill="url(#ig-gradient)" />
+      <circle cx="12" cy="12" r="4.2" fill="none" stroke="#fff" strokeWidth="1.6" />
+      <circle cx="17.2" cy="6.8" r="1.2" fill="#fff" />
+    </svg>
+  )
+}
 
 export function SiteFooter() {
   return (
@@ -12,15 +38,25 @@ export function SiteFooter() {
           Compare preços dos supermercados do Rio de Janeiro.
         </p>
 
-        <a
-          href="https://instagram.com/carrinhocarioca21"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-2 inline-flex items-center gap-2 rounded-full bg-primary-foreground/15 px-4 py-2 text-sm font-medium transition-colors hover:bg-primary-foreground/25"
-        >
-          <AtSign className="size-4" aria-hidden="true" />
-          @carrinhocarioca21
-        </a>
+        <div className="mt-2 flex w-full flex-col items-center gap-3">
+          <a
+            href="https://instagram.com/carrinhocarioca21"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex w-full max-w-[320px] items-center justify-center gap-3 rounded-full border border-white/20 bg-white/10 px-5 py-3 text-sm font-medium backdrop-blur-sm transition-all hover:bg-white/20 sm:max-w-[420px]"
+          >
+            <InstagramGlyph />
+            @carrinhocarioca21
+          </a>
+
+          <a
+            href="mailto:carrinhocarioca21@gmail.com"
+            className="flex w-full max-w-[320px] items-center justify-center gap-3 rounded-full border border-white/20 bg-white/10 px-5 py-3 text-sm font-medium backdrop-blur-sm transition-all hover:bg-white/20 sm:max-w-[420px]"
+          >
+            <Mail className="size-5 shrink-0" aria-hidden="true" />
+            carrinhocarioca21@gmail.com
+          </a>
+        </div>
 
         <p className="mt-4 text-sm text-primary-foreground/70">
           © {new Date().getFullYear()} Carrinho Carioca · O Rio compra melhor aqui.
