@@ -3,12 +3,10 @@
 import useSWR from "swr"
 import { useState } from "react"
 import Image from "next/image"
-import { FileText, Eye, X } from "lucide-react"
+import { FileText, Eye, ShoppingCart, CalendarDays, BadgeCheck } from "lucide-react"
 import { getSupabaseClient, type Encarte } from "@/lib/supabase"
-
-function ehPdf(url: string) {
-  return url.toLowerCase().split("?")[0].endsWith(".pdf")
-}
+import { ehPdf, usarPaginasEncarte } from "@/lib/usar-paginas-encarte"
+import { EncarteVisualizador } from "@/components/encarte-visualizador"
 
 function formatarData(valor: string | null) {
   if (!valor) return null
@@ -16,15 +14,26 @@ function formatarData(valor: string | null) {
   return d.toLocaleDateString("pt-BR")
 }
 
+function hojeISO() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+}
+
 async function buscarEncartes(): Promise<Encarte[]> {
   const supabase = getSupabaseClient()
+  const hoje = hojeISO()
   const { data, error } = await supabase
     .from("encartes")
     .select(
       "id, mercado_id, imagem_url, valido_ate, status, created_at, mercados(id, nome, bairro, logo_cor)",
     )
     .eq("status", "aprovado")
+    // Oculta automaticamente encartes expirados (validade < hoje).
+    // Encartes sem data de validade continuam sempre visiveis.
+    .or(`valido_ate.is.null,valido_ate.gte.${hoje}`)
+    // Mais recentes primeiro; empate desempata pela maior validade.
     .order("created_at", { ascending: false })
+    .order("valido_ate", { ascending: false, nullsFirst: false })
   if (error) throw error
   return (data as unknown as Encarte[]) ?? []
 }
@@ -50,86 +59,90 @@ export function EncartesPublicos() {
 
         <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {encartes.map((encarte) => (
-            <li
+            <EncarteCard
               key={encarte.id}
-              className="overflow-hidden rounded-2xl border border-border bg-card"
-            >
-              <button
-                type="button"
-                onClick={() => setAberto(encarte)}
-                className="group relative block aspect-[3/4] w-full overflow-hidden bg-muted"
-                aria-label={`Ver encarte ${encarte.mercados?.nome ?? ""}`}
-              >
-                {ehPdf(encarte.imagem_url) ? (
-                  <span className="flex h-full w-full flex-col items-center justify-center gap-2 text-muted-foreground">
-                    <FileText className="size-9" aria-hidden="true" />
-                    <span className="text-xs font-medium">Encarte em PDF</span>
-                  </span>
-                ) : (
-                  <Image
-                    src={encarte.imagem_url || "/placeholder.svg"}
-                    alt={`Encarte ${encarte.mercados?.nome ?? ""}`}
-                    fill
-                    unoptimized
-                    className="object-cover transition-transform group-hover:scale-105"
-                  />
-                )}
-                <span className="absolute inset-0 flex items-center justify-center bg-foreground/0 opacity-0 transition-all group-hover:bg-foreground/30 group-hover:opacity-100">
-                  <Eye className="size-6 text-background" aria-hidden="true" />
-                </span>
-              </button>
-              <div className="p-3">
-                <p className="truncate text-sm font-semibold">
-                  {encarte.mercados?.nome ?? "Mercado"}
-                </p>
-                {formatarData(encarte.valido_ate) && (
-                  <p className="text-xs text-muted-foreground">
-                    Válido até {formatarData(encarte.valido_ate)}
-                  </p>
-                )}
-              </div>
-            </li>
+              encarte={encarte}
+              onAbrir={() => setAberto(encarte)}
+            />
           ))}
         </ul>
       </div>
 
-      {/* Visualizador */}
       {aberto && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-          onClick={() => setAberto(null)}
-          role="dialog"
-          aria-modal="true"
-          aria-label={`Encarte ${aberto.mercados?.nome ?? ""}`}
-        >
-          <button
-            type="button"
-            onClick={() => setAberto(null)}
-            className="absolute right-4 top-4 rounded-full bg-background/20 p-2 text-background hover:bg-background/30"
-            aria-label="Fechar"
-          >
-            <X className="size-5" aria-hidden="true" />
-          </button>
-          {ehPdf(aberto.imagem_url) ? (
-            <iframe
-              src={aberto.imagem_url}
-              title={`Encarte ${aberto.mercados?.nome ?? ""}`}
-              className="h-[90vh] w-full max-w-3xl rounded-lg bg-white"
-              onClick={(e) => e.stopPropagation()}
-            />
-          ) : (
-            <Image
-              src={aberto.imagem_url || "/placeholder.svg"}
-              alt={`Encarte ${aberto.mercados?.nome ?? ""}`}
-              width={800}
-              height={1066}
-              unoptimized
-              className="max-h-[90vh] w-auto rounded-lg object-contain"
-              onClick={(e) => e.stopPropagation()}
-            />
-          )}
-        </div>
+        <EncarteVisualizador
+          url={aberto.imagem_url}
+          titulo={`Encarte ${aberto.mercados?.nome ?? ""}`}
+          onClose={() => setAberto(null)}
+        />
       )}
     </section>
+  )
+}
+
+function EncarteCard({
+  encarte,
+  onAbrir,
+}: {
+  encarte: Encarte
+  onAbrir: () => void
+}) {
+  const paginas = usarPaginasEncarte(encarte.imagem_url)
+  const validade = formatarData(encarte.valido_ate)
+
+  return (
+    <li className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition-shadow hover:shadow-md">
+      <button
+        type="button"
+        onClick={onAbrir}
+        className="group relative block aspect-[3/4] w-full overflow-hidden bg-muted"
+        aria-label={`Ver encarte ${encarte.mercados?.nome ?? ""}`}
+      >
+        {ehPdf(encarte.imagem_url) ? (
+          <span className="flex h-full w-full flex-col items-center justify-center gap-2 text-muted-foreground">
+            <FileText className="size-9" aria-hidden="true" />
+            <span className="text-xs font-medium">Encarte em PDF</span>
+          </span>
+        ) : (
+          <Image
+            src={encarte.imagem_url || "/placeholder.svg"}
+            alt={`Encarte ${encarte.mercados?.nome ?? ""}`}
+            fill
+            unoptimized
+            className="object-cover transition-transform group-hover:scale-105"
+          />
+        )}
+
+        {/* Badge ATIVO (encartes expirados nao chegam aqui) */}
+        <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground shadow">
+          <BadgeCheck className="size-3" aria-hidden="true" />
+          Ativo
+        </span>
+
+        <span className="absolute inset-0 flex items-center justify-center bg-foreground/0 opacity-0 transition-all group-hover:bg-foreground/30 group-hover:opacity-100">
+          <Eye className="size-6 text-background" aria-hidden="true" />
+        </span>
+      </button>
+
+      <div className="space-y-1.5 p-3">
+        <p className="flex items-center gap-1.5 font-semibold leading-tight">
+          <ShoppingCart className="size-4 shrink-0 text-primary" aria-hidden="true" />
+          <span className="truncate">{encarte.mercados?.nome ?? "Mercado"}</span>
+        </p>
+
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <FileText className="size-3.5 shrink-0" aria-hidden="true" />
+          {paginas == null
+            ? "Carregando..."
+            : `${paginas} ${paginas === 1 ? "página" : "páginas"}`}
+        </p>
+
+        {validade && (
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <CalendarDays className="size-3.5 shrink-0" aria-hidden="true" />
+            Válido até {validade}
+          </p>
+        )}
+      </div>
+    </li>
   )
 }

@@ -11,11 +11,14 @@ import {
   CheckCircle2,
   TimerOff,
   Clock,
-  X,
+  ShoppingCart,
+  CalendarDays,
 } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { Encarte, Mercado, EncarteStatus, UsuarioRole } from "@/lib/supabase"
+import { ehPdf, usarPaginasEncarte } from "@/lib/usar-paginas-encarte"
+import { EncarteVisualizador } from "@/components/encarte-visualizador"
 import {
   criarEncarte,
   aprovarEncarte,
@@ -56,8 +59,12 @@ function formatarData(valor: string | null) {
   return d.toLocaleDateString("pt-BR")
 }
 
-function ehPdf(url: string) {
-  return url.toLowerCase().split("?")[0].endsWith(".pdf")
+function estaExpiradoPorData(valido_ate: string | null) {
+  if (!valido_ate) return false
+  const hoje = new Date()
+  hoje.setHours(0, 0, 0, 0)
+  const validade = new Date(`${valido_ate}T00:00:00`)
+  return validade < hoje
 }
 
 export function EncartesManager({ role, encartes, mercados }: Props) {
@@ -284,6 +291,8 @@ function EncarteCard({ encarte }: { encarte: Encarte }) {
   const [aberto, setAberto] = useState(false)
   const [acaoPendente, setAcaoPendente] = useState<string | null>(null)
   const info = STATUS_INFO[encarte.status]
+  const paginas = usarPaginasEncarte(encarte.imagem_url)
+  const expiradoPorData = estaExpiradoPorData(encarte.valido_ate)
 
   async function executar(fn: () => Promise<{ ok: boolean; error?: string }>, nome: string) {
     setAcaoPendente(nome)
@@ -322,31 +331,40 @@ function EncarteCard({ encarte }: { encarte: Encarte }) {
           <info.Icon className="size-3" aria-hidden="true" />
           {info.label}
         </span>
+        {/* Badge de validade: ATIVO (verde) ou EXPIRADO (cinza) */}
+        <span
+          className={cn(
+            "absolute right-2 top-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold",
+            expiradoPorData
+              ? "bg-muted text-muted-foreground"
+              : "bg-primary text-primary-foreground",
+          )}
+        >
+          {expiradoPorData ? "Expirado" : "Ativo"}
+        </span>
       </button>
 
       <div className="flex flex-1 flex-col gap-3 p-4">
-        <div>
-          <p className="font-semibold leading-tight">
-            {encarte.mercados?.nome ?? "Mercado"}
+        <div className="space-y-1">
+          <p className="flex items-center gap-1.5 font-semibold leading-tight">
+            <ShoppingCart className="size-4 shrink-0 text-primary" aria-hidden="true" />
+            <span className="truncate">{encarte.mercados?.nome ?? "Mercado"}</span>
           </p>
-          {encarte.mercados?.bairro && (
-            <p className="text-xs text-muted-foreground">{encarte.mercados.bairro}</p>
-          )}
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <FileText className="size-3.5 shrink-0" aria-hidden="true" />
+            {paginas == null
+              ? "Carregando..."
+              : `${paginas} ${paginas === 1 ? "página" : "páginas"}`}
+          </p>
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <CalendarDays className="size-3.5 shrink-0" aria-hidden="true" />
+            Válido até {formatarData(encarte.valido_ate)}
+          </p>
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Clock className="size-3.5 shrink-0" aria-hidden="true" />
+            Enviado em {formatarData(encarte.created_at)}
+          </p>
         </div>
-        <dl className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-          <div>
-            <dt>Enviado em</dt>
-            <dd className="font-medium text-foreground">
-              {formatarData(encarte.created_at)}
-            </dd>
-          </div>
-          <div>
-            <dt>Válido até</dt>
-            <dd className="font-medium text-foreground">
-              {formatarData(encarte.valido_ate)}
-            </dd>
-          </div>
-        </dl>
 
         <div className="mt-auto flex flex-wrap gap-2 pt-2">
           {encarte.status !== "aprovado" && (
@@ -397,41 +415,12 @@ function EncarteCard({ encarte }: { encarte: Encarte }) {
         </div>
       </div>
 
-      {/* Lightbox */}
       {aberto && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-          onClick={() => setAberto(false)}
-          role="dialog"
-          aria-modal="true"
-        >
-          <button
-            type="button"
-            onClick={() => setAberto(false)}
-            className="absolute right-4 top-4 rounded-full bg-background/20 p-2 text-white hover:bg-background/30"
-            aria-label="Fechar"
-          >
-            <X className="size-5" aria-hidden="true" />
-          </button>
-          {ehPdf(encarte.imagem_url) ? (
-            <iframe
-              src={encarte.imagem_url}
-              title={`Encarte ${encarte.mercados?.nome ?? ""}`}
-              className="h-[90vh] w-full max-w-3xl rounded-lg bg-white"
-              onClick={(e) => e.stopPropagation()}
-            />
-          ) : (
-            <Image
-              src={encarte.imagem_url || "/placeholder.svg"}
-              alt={`Encarte ${encarte.mercados?.nome ?? ""}`}
-              width={800}
-              height={1066}
-              unoptimized
-              className="max-h-[90vh] w-auto rounded-lg object-contain"
-              onClick={(e) => e.stopPropagation()}
-            />
-          )}
-        </div>
+        <EncarteVisualizador
+          url={encarte.imagem_url}
+          titulo={`Encarte ${encarte.mercados?.nome ?? ""}`}
+          onClose={() => setAberto(false)}
+        />
       )}
     </li>
   )
