@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useActionState, useEffect, useRef } from "react"
+import { useState, useRef } from "react"
+import { useRouter } from "next/navigation"
 import Image from "next/image"
 import {
   Upload,
@@ -16,15 +17,20 @@ import {
 } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { createClient } from "@/lib/supabase/client"
 import type { Encarte, Mercado, EncarteStatus, UsuarioRole } from "@/lib/supabase"
 import { ehPdf, usarPaginasEncarte } from "@/lib/usar-paginas-encarte"
 import { EncarteVisualizador } from "@/components/encarte-visualizador"
 import {
-  criarEncarte,
+  criarUploadEncarte,
+  registrarEncarte,
   aprovarEncarte,
   expirarEncarte,
   excluirEncarte,
 } from "@/app/admin/actions"
+
+// Limite real do Supabase Storage para o bucket (generoso para PDFs de encarte).
+const MAX_MB = 50
 
 type Props = {
   role: UsuarioRole
@@ -68,27 +74,22 @@ function estaExpiradoPorData(valido_ate: string | null) {
 }
 
 export function EncartesManager({ role, encartes, mercados }: Props) {
+  const router = useRouter()
   const isMaster = role === "master"
   const [filtro, setFiltro] = useState<EncarteStatus | "todos">("todos")
   const [preview, setPreview] = useState<string | null>(null)
   const [previewPdf, setPreviewPdf] = useState(false)
+  const [arquivo, setArquivo] = useState<File | null>(null)
   const [erroArquivo, setErroArquivo] = useState<string | null>(null)
+  const [pending, setPending] = useState(false)
+  const [erroEnvio, setErroEnvio] = useState<string | null>(null)
+  const [progresso, setProgresso] = useState<string | null>(null)
   const formRef = useRef<HTMLFormElement>(null)
-
-  const [state, formAction, pending] = useActionState(criarEncarte, { ok: false })
-
-  useEffect(() => {
-    if (state.ok) {
-      formRef.current?.reset()
-      setPreview(null)
-      setPreviewPdf(false)
-      setErroArquivo(null)
-    }
-  }, [state.ok])
 
   function aoEscolherArquivo(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     setErroArquivo(null)
+    setArquivo(null)
     if (!file) {
       setPreview(null)
       setPreviewPdf(false)
@@ -102,7 +103,6 @@ export function EncartesManager({ role, encartes, mercados }: Props) {
       e.target.value = ""
       return
     }
-    const MAX_MB = 14
     if (file.size > MAX_MB * 1024 * 1024) {
       setErroArquivo(
         `Arquivo muito grande (${(file.size / 1024 / 1024).toFixed(1)} MB). O limite é ${MAX_MB} MB.`,
@@ -112,8 +112,87 @@ export function EncartesManager({ role, encartes, mercados }: Props) {
       e.target.value = ""
       return
     }
+    setArquivo(file)
     setPreviewPdf(file.type === "application/pdf")
     setPreview(URL.createObjectURL(file))
+  }
+
+  async function aoEnviar(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setErroEnvio(null)
+
+    const form = e.currentTarget
+    const fd = new FormData(form)
+    const mercado_id = String(fd.get("mercado_id") ?? "")
+    const validoRaw = fd.get("valido_ate")
+    const valido_ate = validoRaw && String(validoRaw).trim() !== "" ? String(validoRaw) : null
+    const aprovar = fd.get("aprovar") === "on"
+
+    if (!mercado_id) {
+      setErroEnvio("Selecione um mercado.")
+      return
+    }
+    if (!arquivo) {
+      setErroEnvio("Selecione o arquivo do encarte.")
+      return
+    }
+
+    const tamanhoMb = (arquivo.size / 1024 / 1024).toFixed(2)
+    console.log("[v0] Encarte: arquivo selecionado", {
+      nome: arquivo.name,
+      tipo: arquivo.type,
+      tamanhoMb,
+    })
+
+    setPending(true)
+    try {
+      // PASSO 1: pedir a signed upload URL (requisicao leve, sem o arquivo).
+      setProgresso("Preparando upload...")
+      const sign = await criarUploadEncarte(arquivo.name, arquivo.type)
+      if (!sign.ok || !sign.path || !sign.token) {
+        throw new Error(sign.error ?? "Falha ao preparar o upload.")
+      }
+      console.log("[v0] Encarte: signed URL gerada", { path: sign.path })
+
+      // PASSO 2: upload DIRETO do navegador para o Supabase Storage.
+      console.log("[v0] Encarte: upload iniciado", { tamanhoMb })
+      setProgresso(`Enviando arquivo (${tamanhoMb} MB)...`)
+      const supabase = createClient()
+      const { error: upErr } = await supabase.storage
+        .from("encartes")
+        .uploadToSignedUrl(sign.path, sign.token, arquivo, {
+          contentType: arquivo.type,
+        })
+      if (upErr) {
+        console.log("[v0] Encarte: ERRO no upload", upErr.message)
+        throw new Error(`Falha no upload: ${upErr.message}`)
+      }
+      console.log("[v0] Encarte: upload concluído", { path: sign.path })
+
+      // PASSO 3: registrar o encarte no banco (requisicao leve).
+      setProgresso("Salvando registro...")
+      const reg = await registrarEncarte({ path: sign.path, mercado_id, valido_ate, aprovar })
+      if (!reg.ok) {
+        console.log("[v0] Encarte: ERRO ao registrar", reg.error)
+        throw new Error(reg.error ?? "Falha ao registrar o encarte.")
+      }
+      console.log("[v0] Encarte: registrado com sucesso")
+
+      // Limpa o formulario e atualiza a lista.
+      form.reset()
+      setPreview(null)
+      setPreviewPdf(false)
+      setArquivo(null)
+      setErroArquivo(null)
+      router.refresh()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erro ao enviar encarte."
+      console.log("[v0] Encarte: falha final", msg)
+      setErroEnvio(msg)
+    } finally {
+      setPending(false)
+      setProgresso(null)
+    }
   }
 
   const lista =
@@ -131,7 +210,7 @@ export function EncartesManager({ role, encartes, mercados }: Props) {
       {/* Formulario de upload */}
       <form
         ref={formRef}
-        action={formAction}
+        onSubmit={aoEnviar}
         className="rounded-2xl border border-border bg-card p-6"
       >
         <h2 className="text-lg font-semibold">Novo encarte</h2>
@@ -232,9 +311,9 @@ export function EncartesManager({ role, encartes, mercados }: Props) {
           </div>
         </div>
 
-        {state.error && (
+        {erroEnvio && (
           <p className="mt-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {state.error}
+            {erroEnvio}
           </p>
         )}
 
@@ -248,7 +327,7 @@ export function EncartesManager({ role, encartes, mercados }: Props) {
           ) : (
             <Upload className="size-4" aria-hidden="true" />
           )}
-          Enviar encarte
+          {pending ? (progresso ?? "Enviando...") : "Enviar encarte"}
         </button>
       </form>
 

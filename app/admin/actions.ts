@@ -296,56 +296,69 @@ export async function excluirUsuario(id: string): Promise<ActionState> {
 
 const TIPOS_ACEITOS = ["image/jpeg", "image/png", "image/webp", "application/pdf"]
 
-async function uploadEncarte(arquivo: File): Promise<string> {
-  if (!TIPOS_ACEITOS.includes(arquivo.type)) {
-    throw new Error("Formato inválido. Envie uma imagem JPG, PNG, WEBP ou um PDF.")
-  }
-  const db = adminDb()
-  const ext = arquivo.name.split(".").pop() || (arquivo.type === "application/pdf" ? "pdf" : "jpg")
-  const nome = `${crypto.randomUUID()}.${ext}`
-  const { error } = await db.storage
-    .from("encartes")
-    .upload(nome, arquivo, { contentType: arquivo.type, upsert: false })
-  if (error) throw new Error(`Falha no upload do encarte: ${error.message}`)
-  const { data } = db.storage.from("encartes").getPublicUrl(nome)
-  return data.publicUrl
+type UploadUrlState = {
+  ok: boolean
+  error?: string
+  path?: string
+  token?: string
 }
 
-export async function criarEncarte(
-  _prev: ActionState,
-  formData: FormData,
-): Promise<ActionState> {
+// PASSO 1: gera uma signed upload URL para o navegador enviar o arquivo
+// DIRETAMENTE ao Supabase Storage, sem passar pelo Next.js/Vercel.
+// Isso contorna o limite de corpo de ~4.5MB das funcoes serverless da Vercel.
+export async function criarUploadEncarte(
+  nomeArquivo: string,
+  tipo: string,
+): Promise<UploadUrlState> {
+  try {
+    await requireStaff()
+    if (!TIPOS_ACEITOS.includes(tipo)) {
+      return { ok: false, error: "Formato inválido. Envie JPG, PNG, WEBP ou PDF." }
+    }
+    const ext = nomeArquivo.split(".").pop() || (tipo === "application/pdf" ? "pdf" : "jpg")
+    const path = `${crypto.randomUUID()}.${ext}`
+    const db = adminDb()
+    const { data, error } = await db.storage.from("encartes").createSignedUploadUrl(path)
+    if (error || !data) {
+      return { ok: false, error: error?.message ?? "Não foi possível iniciar o upload." }
+    }
+    return { ok: true, path: data.path, token: data.token }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Erro ao iniciar upload." }
+  }
+}
+
+// PASSO 2: apos o upload direto, grava o registro do encarte no banco.
+export async function registrarEncarte(input: {
+  path: string
+  mercado_id: string
+  valido_ate: string | null
+  aprovar: boolean
+}): Promise<ActionState> {
   try {
     const perfil = await requireStaff()
-
-    const mercado_id = String(formData.get("mercado_id") ?? "")
-    if (!mercado_id) throw new Error("Selecione um mercado.")
-
-    const arquivo = formData.get("imagem") as File | null
-    if (!arquivo || arquivo.size === 0) throw new Error("Selecione o arquivo do encarte.")
-
-    const validoRaw = formData.get("valido_ate")
-    const valido_ate =
-      validoRaw && String(validoRaw).trim() !== "" ? String(validoRaw) : null
-
-    const imagem_url = await uploadEncarte(arquivo)
-
-    // Colaborador cria pendente; master pode ja aprovar.
-    const status = perfil.role === "master" && formData.get("aprovar") === "on"
-      ? "aprovado"
-      : "pendente"
+    if (!input.mercado_id) throw new Error("Selecione um mercado.")
+    if (!input.path) throw new Error("Arquivo não enviado.")
 
     const db = adminDb()
-    const { error } = await db
-      .from("encartes")
-      .insert({ mercado_id, imagem_url, valido_ate, status })
+    const { data } = db.storage.from("encartes").getPublicUrl(input.path)
+
+    // Colaborador cria pendente; master pode ja aprovar.
+    const status = perfil.role === "master" && input.aprovar ? "aprovado" : "pendente"
+
+    const { error } = await db.from("encartes").insert({
+      mercado_id: input.mercado_id,
+      imagem_url: data.publicUrl,
+      valido_ate: input.valido_ate,
+      status,
+    })
     if (error) throw new Error(error.message)
 
     revalidatePath("/admin/encartes")
     revalidatePath("/")
     return { ok: true }
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Erro ao enviar encarte." }
+    return { ok: false, error: err instanceof Error ? err.message : "Erro ao registrar encarte." }
   }
 }
 
