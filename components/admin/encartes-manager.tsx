@@ -95,6 +95,16 @@ export function EncartesManager({ role, encartes, mercados }: Props) {
       e.target.value = ""
       return
     }
+    const MAX_MB = 14
+    if (file.size > MAX_MB * 1024 * 1024) {
+      setErroArquivo(
+        `Arquivo muito grande (${(file.size / 1024 / 1024).toFixed(1)} MB). O limite é ${MAX_MB} MB.`,
+      )
+      setPreview(null)
+      setPreviewPdf(false)
+      e.target.value = ""
+      return
+    }
     setPreviewPdf(file.type === "application/pdf")
     setPreview(URL.createObjectURL(file))
   }
