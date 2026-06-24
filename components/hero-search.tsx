@@ -1,7 +1,7 @@
 import { Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
-const exemplos = ["Heineken", "Picanha", "Café Pilão", "Leite"]
+const exemplos = ["Arroz", "Picanha", "Café Pilão", "Leite"]
 
 export function HeroSearch() {
   return (
@@ -10,19 +10,16 @@ export function HeroSearch() {
         className="pointer-events-none absolute -right-16 -top-16 size-64 rounded-full bg-primary-foreground/10 blur-2xl"
         aria-hidden="true"
       />
-      <div className="relative mx-auto max-w-5xl px-4 py-16 text-center sm:py-24">
-        <span className="animate-fade-up inline-flex items-center rounded-full bg-primary-foreground/15 px-3 py-1 text-xs font-medium">
-          Barra · Recreio · Jacarepaguá
-        </span>
-        <h1 className="animate-fade-up mt-5 text-balance text-4xl font-extrabold tracking-tight sm:text-6xl" style={{ animationDelay: "80ms" }}>
+      <div className="relative mx-auto max-w-5xl px-4 py-10 text-center sm:py-14">
+        <h1 className="animate-fade-up text-balance text-4xl font-extrabold tracking-tight sm:text-6xl" style={{ animationDelay: "80ms" }}>
           Carrinho Carioca
         </h1>
-        <p className="animate-fade-up mx-auto mt-4 max-w-xl text-pretty text-base leading-relaxed text-primary-foreground/90 sm:text-lg" style={{ animationDelay: "160ms" }}>
+        <p className="animate-fade-up mx-auto mt-3 max-w-xl text-pretty text-base leading-relaxed text-primary-foreground/90 sm:text-lg" style={{ animationDelay: "160ms" }}>
           Compare preços dos supermercados do Rio de Janeiro.
         </p>
 
         <form
-          className="animate-fade-up mx-auto mt-8 flex max-w-xl flex-col gap-3 sm:flex-row"
+          className="animate-fade-up mx-auto mt-6 flex max-w-xl flex-col gap-3 sm:flex-row"
           style={{ animationDelay: "240ms" }}
           role="search"
         >
@@ -50,7 +47,7 @@ export function HeroSearch() {
           </Button>
         </form>
 
-        <div className="animate-fade-up mt-5 flex flex-wrap items-center justify-center gap-2" style={{ animationDelay: "320ms" }}>
+        <div className="animate-fade-up mt-4 flex flex-wrap items-center justify-center gap-2" style={{ animationDelay: "320ms" }}>
           <span className="text-sm text-primary-foreground/70">Exemplos:</span>
           {exemplos.map((item) => (
             <button
